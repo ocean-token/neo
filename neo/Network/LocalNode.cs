@@ -87,7 +87,7 @@ namespace Neo.Network
             Blockchain.PersistCompleted += Blockchain_PersistCompleted;
         }
 
-        private async void AcceptPeers()
+        private async Task AcceptPeers()
         {
 #if !NET47
             //There is a bug in .NET Core 2.0 that blocks async method which returns void.
@@ -746,7 +746,7 @@ namespace Neo.Network
                         {
                             listener.Start();
                             Port = (ushort)port;
-                            AcceptPeers();
+                            await AcceptPeers().ConfigureAwait(false);
                         }
                         catch (SocketException) { }
                     }

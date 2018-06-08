@@ -12,16 +12,16 @@ namespace Neo.IO.Data.LevelDB
 
     internal static class Native
     {
-#if NET47
         static Native()
         {
-            string platform = IntPtr.Size == 8 ? "x64" : "x86";
-            LoadLibrary(Path.Combine(AppContext.BaseDirectory, platform, "libleveldb"));
+            string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                Environment.Is64BitProcess ? "x64" : "x86",
+                "libleveldb.dll");
+            LoadLibrary(filePath);
         }
 
         [DllImport("kernel32")]
-        private static extern IntPtr LoadLibrary(string dllToLoad);
-#endif
+        private static extern IntPtr LoadLibrary(string fileName);
 
         #region Logger
         [DllImport("libleveldb", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.Cdecl)]
