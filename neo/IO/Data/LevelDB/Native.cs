@@ -12,6 +12,7 @@ namespace Neo.IO.Data.LevelDB
 
     internal static class Native
     {
+#if NET472
         static Native()
         {
             string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
@@ -22,6 +23,7 @@ namespace Neo.IO.Data.LevelDB
 
         [DllImport("kernel32")]
         private static extern IntPtr LoadLibrary(string fileName);
+#endif
 
         #region Logger
         [DllImport("libleveldb", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.Cdecl)]
