@@ -30,6 +30,8 @@ namespace Neo.Implementations.Blockchains.LevelDB
         private AutoResetEvent new_block_event = new AutoResetEvent(false);
         private bool disposed = false;
 
+        private Dictionary<UInt160, Fixed8> balanceSnapshot = new Dictionary<UInt160, Fixed8>();
+
         public override UInt256 CurrentBlockHash => header_index[(int)current_block_height];
         public override UInt256 CurrentHeaderHash => header_index[header_index.Count - 1];
         public override uint HeaderHeight => (uint)header_index.Count - 1;
@@ -153,7 +155,7 @@ namespace Neo.Implementations.Blockchains.LevelDB
                 db.Write(WriteOptions.Default, batch);
             }
 
-            lock (PersistLock)
+            //lock (PersistLock)//import block no need lock,improve efficience
             {
                 Persist(block);
                 OnPersistCompleted(block);
@@ -617,8 +619,9 @@ namespace Neo.Implementations.Blockchains.LevelDB
                     }
                 }
             }
-            accounts.DeleteWhere((k, v) => !v.IsFrozen && v.Votes.Length == 0 && v.Balances.All(p => p.Value <= Fixed8.Zero));
+            accounts.DeleteWhere((k, v) => !v.IsFrozen && v.Votes.Length == 0 && v.Balances.All(p => p.Value < Fixed8.Zero));
             accounts.Commit();
+            Snapshot(block.Index, accounts);
             unspentcoins.DeleteWhere((k, v) => v.Items.All(p => p.HasFlag(CoinState.Spent)));
             unspentcoins.Commit();
             spentcoins.DeleteWhere((k, v) => v.Items.Count == 0);
@@ -632,6 +635,55 @@ namespace Neo.Implementations.Blockchains.LevelDB
             db.Write(WriteOptions.Default, batch);
             current_block_height = block.Index;
         }
+
+        private void Snapshot(uint blockIndex, DbCache<UInt160, AccountState> accounts)
+        {
+            //todo:output db blockindex:balanceSnapshot
+            uint printBlockNumber = 200000;
+            var changeSet = accounts?.GetChangeSet()?.ToArray();
+            if (changeSet?.Length < 1)
+            {
+                if (blockIndex == printBlockNumber)
+                {
+                    SaveSnapshot(printBlockNumber);
+                }
+                return;
+            }
+
+            foreach (var trackable in changeSet)
+            {
+                if (trackable.Item.Balances.ContainsKey(GoverningToken.Hash))
+                {
+                    balanceSnapshot[trackable.Key] = trackable.Item.Balances[GoverningToken.Hash];
+                }
+            }
+
+            if (blockIndex == printBlockNumber)
+            {
+                SaveSnapshot(printBlockNumber);
+            }
+        }
+
+        private void SaveSnapshot(uint blockIndex)
+        {
+            //output db blockIndex:balanceSnapshot
+            var dir = Path.Combine(AppContext.BaseDirectory, "snapshot");
+            if (!Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            var filePath = Path.Combine(dir, $"{blockIndex}.csv");
+            using (StreamWriter sw = new StreamWriter(filePath))
+            {
+                foreach (var item in balanceSnapshot)
+                {
+                    if (item.Value == Fixed8.Zero)
+                        continue;
+                    
+                    string line = $"{Neo.Wallets.Wallet.ToAddress(item.Key)},{item.Value}";
+                    sw.WriteLine(line);
+                }
+            }
+        }
+
 
         private void PersistBlocks()
         {
